@@ -28,7 +28,7 @@ Add to your lazy.nvim config:
 
 ```lua
 {
-  "0xdilo/lmeow.nvim",
+  "0xdilo/lmeow",
   dependencies = { "nvim-lua/plenary.nvim" },
   config = function()
     require("lmeow").setup({
