@@ -107,7 +107,7 @@ require("lmeow").setup({
 
 ```lua
 require("lmeow").setup({
-  default_model = "gpt4",
+  default_model = "gpt5",
   
   models = {
     -- Add your custom models here
@@ -115,16 +115,18 @@ require("lmeow").setup({
       provider = "openai",
       model = "gpt-5",
       name = "GPT-5",
-      -- Per-model overrides (override provider defaults)
-      temperature = 0.2,
-      max_tokens = 4096
+      -- Per-model params (override provider defaults)
+      params = {
+        temperature = 1,
+        max_completion_tokens = 32000
+      }
     },
     
     myclaude = {
       provider = "claude",
       model = "claude-3-5-sonnet-20241022", 
       name = "My Claude",
-      max_tokens = 5000
+      params = { max_tokens = 5000 }
     },
     
     mixtral = {
@@ -143,12 +145,16 @@ require("lmeow").setup({
   -- Override provider settings if needed
   providers = {
     openai = {
-      max_tokens = 3000,
-      temperature = 0.3
+      defaultModelParams = {
+        max_completion_tokens = 3000,
+        temperature = 1
+      }
     },
     claude = {
-      max_tokens = 4000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 4000,
+        temperature = 0.7
+      }
     }
   },
   
@@ -173,8 +179,10 @@ require("lmeow").setup({
   
   providers = {
     openai = {
-      max_tokens = 2000,
-      temperature = 0.7,
+      defaultModelParams = {
+        max_completion_tokens = 32000,
+        temperature = 1
+      },
       -- Override base URL for custom endpoints
       base_url = "https://api.openai.com/v1/chat/completions"
     }
@@ -186,11 +194,12 @@ require("lmeow").setup({
 })
 ```
 
-### Provider vs Model Overrides
+### Provider vs Model Params
 
-- Provider config sets defaults for all models under that provider (e.g., `temperature`, `max_tokens`, `base_url`).
-- Model config can override any of those fields for that specific model.
-- API keys resolve from `providers.<name>.env_var` environment variable by default; a model-level `api_key` can override if needed.
+- Provider config sets defaults for model parameters under `providers.<name>.defaultModelParams` (e.g., `temperature`, `max_tokens`).
+- Model config can override these under `models.<name>.params` for that specific model.
+- Non-payload settings like `base_url`, `env_var`, `api_key` stay out of the JSON payload.
+- API keys resolve from `providers.<name>.env_var` automatically; a model-level `api_key` can still override if needed.
 
 Example:
 
@@ -201,14 +210,18 @@ require("lmeow").setup({
       provider = "openai",
       model = "gpt-4o",
       name = "Precise GPT-4o",
-      temperature = 0.1,   -- override provider default
-      max_tokens = 4096    -- override provider default
+      params = {
+        temperature = 0.1,   -- override provider default
+        max_tokens = 4096    -- override provider default
+      }
     }
   },
   providers = {
     openai = {
-      temperature = 0.7,   -- default for all OpenAI models
-      max_tokens = 2000
+      defaultModelParams = {
+        temperature = 0.7,   -- default for all OpenAI models
+        max_tokens = 2000
+      }
     }
   }
 })

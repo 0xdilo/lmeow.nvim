@@ -4,7 +4,7 @@ return {
   dependencies = { "nvim-lua/plenary.nvim" },
   config = function()
     require("lmeow").setup({
-      default_model = "gpt4",
+      default_model = "gpt5",
 
       -- Add custom models here
       models = {
@@ -12,27 +12,30 @@ return {
           provider = "openai",
           model = "gpt-5",
           name = "Best Model",
-          -- Model-level overrides (override provider defaults)
-          temperature = 1, -- only supports 1
-          max_completion_tokens = 65536
+          -- Model-level params (override provider defaults)
+          params = {
+            temperature = 1, -- only supports 1
+            max_completion_tokens = 65536
+          }
         },
         fastmodel = {
           provider = "openai",
-          model = "gpt-3.5-turbo",
+          model = "gpt-5-nano",
           name = "Fast Model",
           -- Example: override temperature just for this model
-          temperature = 0.1
+          params = { temperature = 0.1 }
         },
         codingassistant = {
           provider = "claude",
-          model = "claude-3-5-sonnet-20241022",
+          model = "claude-4-sonnet",
           name = "Coding Assistant",
-          max_tokens = 6000
+          params = { max_tokens = 32000 }
         },
         fastai = {
           provider = "gemini",
           model = "gemini-2.5-flash",
-          name = "Fast AI"
+          name = "Fast AI",
+          params = { max_tokens = 32000 }
         },
         -- Example showing per-model base_url override (e.g., gateway or proxy)
         router_llama = {
@@ -40,20 +43,24 @@ return {
           model = "meta-llama/llama-3.1-70b",
           name = "Router Llama",
           base_url = "https://openrouter.ai/api/v1/chat/completions",
-          temperature = 0.3
+          params = { temperature = 0.3 }
         }
       },
 
       -- Override default provider settings if needed
       providers = {
         openai = {
-          max_tokens = 3000,
-          temperature = 0.3
+          defaultModelParams = {
+            max_completion_tokens = 3000,
+            temperature = 1
+          }
         },
         -- You can also set defaults for other providers
         claude = {
-          max_tokens = 4000,
-          temperature = 0.6
+          defaultModelParams = {
+            max_tokens = 32000,
+            temperature = 0.7
+          }
         }
       },
 
