@@ -114,13 +114,17 @@ require("lmeow").setup({
     gpt5 = {
       provider = "openai",
       model = "gpt-5",
-      name = "GPT-5"
+      name = "GPT-5",
+      -- Per-model overrides (override provider defaults)
+      temperature = 0.2,
+      max_tokens = 4096
     },
     
     myclaude = {
       provider = "claude",
       model = "claude-3-5-sonnet-20241022", 
-      name = "My Claude"
+      name = "My Claude",
+      max_tokens = 5000
     },
     
     mixtral = {
@@ -178,6 +182,34 @@ require("lmeow").setup({
   
   keymaps = {
     edit_selection = "<leader>ac"
+  }
+})
+```
+
+### Provider vs Model Overrides
+
+- Provider config sets defaults for all models under that provider (e.g., `temperature`, `max_tokens`, `base_url`).
+- Model config can override any of those fields for that specific model.
+- API keys resolve from `providers.<name>.env_var` environment variable by default; a model-level `api_key` can override if needed.
+
+Example:
+
+```lua
+require("lmeow").setup({
+  models = {
+    precise_gpt4 = {
+      provider = "openai",
+      model = "gpt-4o",
+      name = "Precise GPT-4o",
+      temperature = 0.1,   -- override provider default
+      max_tokens = 4096    -- override provider default
+    }
+  },
+  providers = {
+    openai = {
+      temperature = 0.7,   -- default for all OpenAI models
+      max_tokens = 2000
+    }
   }
 })
 ```
