@@ -1,0 +1,10 @@
+{
+  "name": "lmeow.nvim",
+  "version": "1.0.0",
+  "description": "Inline AI code editing for Neovim",
+  "author": "lmeow",
+  "license": "MIT",
+  "dependencies": {
+    "nvim-lua/plenary.nvim"
+  }
+}
