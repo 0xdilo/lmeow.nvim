@@ -9,13 +9,13 @@ M.config = {
       name = "GPT-4"
     },
     gpt4o = {
-      provider = "openai", 
+      provider = "openai",
       model = "gpt-4o",
       name = "GPT-4o"
     },
     gpt4turbo = {
       provider = "openai",
-      model = "gpt-4-turbo", 
+      model = "gpt-4-turbo",
       name = "GPT-4 Turbo"
     },
     gpt35 = {
@@ -23,7 +23,7 @@ M.config = {
       model = "gpt-3.5-turbo",
       name = "GPT-3.5"
     },
-    
+
     -- Claude models
     claude = {
       provider = "claude",
@@ -40,7 +40,7 @@ M.config = {
       model = "claude-3-haiku-20240307",
       name = "Claude 3 Haiku"
     },
-    
+
     -- OpenRouter models
     gpt4router = {
       provider = "openrouter",
@@ -52,14 +52,14 @@ M.config = {
       model = "meta-llama/llama-3.1-70b",
       name = "Llama 3.1 70B"
     },
-    
+
     -- Grok models
     grok = {
       provider = "grok",
       model = "grok-beta",
       name = "Grok Beta"
     },
-    
+
     -- Gemini models
     gemini = {
       provider = "gemini",
@@ -72,9 +72,9 @@ M.config = {
       name = "Gemini 2.5 Pro"
     }
   },
-  
+
   default_model = "gpt4",
-  
+
   providers = {
     openai = {
       base_url = "https://api.openai.com/v1/chat/completions",
@@ -84,7 +84,7 @@ M.config = {
     },
     claude = {
       base_url = "https://api.anthropic.com/v1/messages",
-      env_var = "ANTHROPIC_API_KEY", 
+      env_var = "ANTHROPIC_API_KEY",
       max_tokens = 2000,
       temperature = 0.7
     },
@@ -107,9 +107,10 @@ M.config = {
       temperature = 0.7
     }
   },
-  
-  system_prompt = "You are an expert programmer and text processor. When asked to modify content, preserve ALL existing structure, text, and formatting that is not directly related to the requested changes. Only modify what's necessary to complete the task. Return ONLY the modified content without any explanations, comments, markdown, or additional formatting.",
-  
+
+  system_prompt =
+  "You are an expert programmer and text processor. When asked to modify content, preserve ALL existing structure, text, and formatting that is not directly related to the requested changes. Only modify what's necessary to complete the task. Return ONLY the modified content without any explanations, comments, markdown, or additional formatting.",
+
   keymaps = {
     edit_selection = "<leader>ac"
   }
@@ -120,17 +121,17 @@ M.current_model = nil
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
   M.current_model = M.config.default_model
-  
+
   -- Resolve API keys from environment variables
   for provider_name, provider_config in pairs(M.config.providers) do
     if provider_config.env_var and not provider_config.api_key then
       provider_config.api_key = os.getenv(provider_config.env_var)
     end
   end
-  
+
   M.setup_keymaps()
   M.setup_commands()
-  
+
   vim.api.nvim_set_hl(0, "LmeowPopup", { fg = "#ffffff", bg = "#1e1e1e" })
   vim.api.nvim_set_hl(0, "LmeowBorder", { fg = "#61afef", bg = "#1e1e1e" })
 end
@@ -141,10 +142,10 @@ function M.setup_keymaps()
       -- Store the current visual selection before exiting visual mode
       local start_line = vim.fn.line("v")
       local end_line = vim.fn.line(".")
-      
+
       -- Exit visual mode
       vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
-      
+
       -- Call edit function with the stored selection
       require("lmeow.edit").edit_selection_with_range(start_line, end_line)
     end, { desc = "Edit selection with AI" })
@@ -158,9 +159,9 @@ function M.setup_commands()
       vim.notify("Lmeow: Usage: :Lmeow model <name> | :Lmeow status", vim.log.levels.WARN)
       return
     end
-    
+
     local subcommand = args[1]
-    
+
     if subcommand == "model" and #args >= 2 then
       local model_name = args[2]
       if M.config.models[model_name] then
@@ -170,14 +171,19 @@ function M.setup_commands()
       else
         vim.notify("Lmeow: Model '" .. model_name .. "' not found", vim.log.levels.ERROR)
       end
-      
     elseif subcommand == "status" then
       local model_info = M.config.models[M.current_model]
       if model_info then
         local provider_config = M.config.providers[model_info.provider]
         local api_key_status = provider_config and provider_config.api_key and "set" or "not set"
         local model_names = vim.tbl_keys(M.config.models)
-        vim.notify("Lmeow: Model=" .. model_info.name .. ", Provider=" .. model_info.provider .. ", API Key=" .. api_key_status .. "\nAvailable models: " .. table.concat(model_names, ", "), vim.log.levels.INFO)
+        vim.notify(
+          "Lmeow: Model=" ..
+          model_info.name ..
+          ", Provider=" ..
+          model_info.provider ..
+          ", API Key=" .. api_key_status .. "\nAvailable models: " .. table.concat(model_names, ", "),
+          vim.log.levels.INFO)
       else
         vim.notify("Lmeow: Invalid model configuration", vim.log.levels.ERROR)
       end
@@ -186,11 +192,11 @@ function M.setup_commands()
     nargs = "*",
     complete = function(arg_lead, cmd_line, cursor_pos)
       local cmd_parts = vim.split(cmd_line, "%s+")
-      
+
       if #cmd_parts == 2 then
         return vim.tbl_filter(function(cmd)
           return cmd:match("^" .. arg_lead)
-        end, {"model", "status"})
+        end, { "model", "status" })
       elseif #cmd_parts == 3 and cmd_parts[2] == "model" then
         local models = vim.tbl_keys(M.config.models)
         return vim.tbl_filter(function(m)
@@ -211,24 +217,25 @@ function M.get_model_config(model_name)
   if not model_config then
     return nil
   end
-  
+
   local provider_config = M.config.providers[model_config.provider]
   if not provider_config then
     return nil
   end
-  
+
   -- Create a copy of the provider config
   local full_config = vim.tbl_deep_extend("force", {}, provider_config)
-  
+
   -- Always check environment variables for API key
   if not full_config.api_key and full_config.env_var then
     full_config.api_key = os.getenv(full_config.env_var)
   end
-  
+
   -- Merge model config
   full_config = vim.tbl_deep_extend("force", full_config, model_config)
-  
+
   return full_config
 end
 
 return M
+
