@@ -1,99 +1,297 @@
-# Lmeow.nvim
+# lmeow.nvim
 
-Inline AI code editing for Neovim.
+<div align="center">
 
-## Features
+```
+   ∧,,,∧
+  (  • ω •)
+  / づ💡 
+```
 
-- Visual mode selection and AI-powered code editing
-- Simple model-based configuration (no provider switching needed)
-- Built-in models for major providers (OpenAI, Claude, OpenRouter, Grok)
-- Easy custom model addition
-- Environment variable API key detection
-- Lazy.nvim compatible
+**🐱 AI-powered inline code editing for Neovim**
 
-## Installation
+</div>
+
+## ✨ Features
+
+- 🎯 **Inline AI editing** - Select code and get AI-powered modifications
+- 🤖 **Multiple LLM providers** - OpenAI, Claude, Gemini, OpenRouter, Grok
+- 🚀 **Environment variable support** - No hardcoded API keys needed
+- 🎨 **Custom models** - Easy addition of your own AI models
+- 📝 **Smart prompts** - Preserves existing content while making requested changes
+- 🎹 **Simple interface** - Visual select → press shortcut → enter prompt → done
+- 🔧 **No configuration required** - Works out of the box with sensible defaults
+
+## 🚀 Installation
+
+Add to your lazy.nvim config:
 
 ```lua
 {
-  "polizia/lmeow.nvim",
+  "0xdilo/lmeow.nvim",
   dependencies = { "nvim-lua/plenary.nvim" },
   config = function()
     require("lmeow").setup({
-      default_model = "gpt4",
-      
-      -- Add your custom models
-      models = {
-        bestmodel = {
-          provider = "openai",
-          model = "gpt-5",
-          name = "Best Model"
-        }
-      }
+      -- Configuration goes here (see below)
     })
   end
 }
 ```
 
-## Environment Variables
+## 🔑 Setup API Keys
 
-API keys are automatically detected from environment variables:
+Set environment variables in your shell:
 
-- `OPENAI_API_KEY` - OpenAI API key
-- `ANTHROPIC_API_KEY` - Anthropic/Claude API key  
-- `OPENROUTER_API_KEY` - OpenRouter API key
-- `XAI_API_KEY` - X.AI/Grok API key
-- `GEMINI_API_KEY` - Google Gemini API key
+```bash
+# OpenAI
+export OPENAI_API_KEY="your-openai-key"
 
-## Built-in Models
+# Anthropic/Claude  
+export ANTHROPIC_API_KEY="your-claude-key"
+
+# Google Gemini
+export GEMINI_API_KEY="your-gemini-key"
+
+# OpenRouter
+export OPENROUTER_API_KEY="your-openrouter-key"
+
+# X.AI/Grok
+export XAI_API_KEY="your-grok-key"
+```
+
+## 🎯 Quick Start
+
+1. **Select code** in visual mode (`v`)
+2. **Press** `<leader>ac` (default keymap)
+3. **Enter your prompt** (e.g., "add error handling", "optimize this function", "translate to Python")
+4. **AI replaces** your selection with the improved code
+
+## 📖 Commands
+
+- `:Lmeow model <name>` - Switch to a different model
+- `:Lmeow status` - Show current model and available models
+
+## 🤖 Built-in Models
 
 The plugin includes these models by default:
 
-- `gpt4` - GPT-4 (OpenAI)
-- `gpt4o` - GPT-4o (OpenAI)
-- `gpt4turbo` - GPT-4 Turbo (OpenAI)
-- `gpt35` - GPT-3.5 (OpenAI)
-- `claude` - Claude 3.5 Sonnet (Anthropic)
-- `claudeopus` - Claude 3 Opus (Anthropic)
-- `claudehaiku` - Claude 3 Haiku (Anthropic)
-- `gpt4router` - GPT-4 via OpenRouter
-- `llama` - Llama 3.1 70B (OpenRouter)
-- `grok` - Grok Beta (X.AI)
-- `gemini` - Gemini 2.5 Flash (Google)
-- `geminipro` - Gemini 2.5 Pro (Google)
+| Model Name | Provider | Description |
+|------------|----------|-------------|
+| `gpt4` | OpenAI | GPT-4 |
+| `gpt4o` | OpenAI | GPT-4o |
+| `gpt4turbo` | OpenAI | GPT-4 Turbo |
+| `gpt35` | OpenAI | GPT-3.5 Turbo |
+| `claude` | Anthropic | Claude 3.5 Sonnet |
+| `claudeopus` | Anthropic | Claude 3 Opus |
+| `claudehaiku` | Anthropic | Claude 3 Haiku |
+| `gemini` | Google | Gemini 2.5 Flash |
+| `geminipro` | Google | Gemini 2.5 Pro |
+| `gpt4router` | OpenRouter | GPT-4 via OpenRouter |
+| `llama` | OpenRouter | Llama 3.1 70B |
+| `grok` | X.AI | Grok Beta |
 
-## Usage
+## ⚙️ Configuration
 
-1. Select code in visual mode (v)
-2. Press `<leader>ac` (default mapping)
-3. Enter your prompt
-4. AI will edit the code inline
-
-## Commands
-
-- `:Lmeow model <name>` - Switch to a different model
-- `:Lmeow models` - List all available models
-- `:Lmeow status` - Show current model and API key status
-
-## Configuration
-
-Add custom models easily:
+### Basic Setup
 
 ```lua
 require("lmeow").setup({
-  default_model = "bestmodel",
-  models = {
-    bestmodel = {
-      provider = "openai",
-      model = "gpt-5",  -- The actual model name for the API
-      name = "Best Model"  -- Display name
-    },
-    fastmodel = {
-      provider = "claude",
-      model = "claude-3-haiku-20240307",
-      name = "Fast Model"
-    }
+  default_model = "gpt4",  -- Your preferred default model
+  keymaps = {
+    edit_selection = "<leader>ac"  -- Or your preferred keymap
   }
 })
 ```
 
-Then use: `:Lmeow model bestmodel`
+### Adding Custom Models
+
+```lua
+require("lmeow").setup({
+  default_model = "gpt4",
+  
+  models = {
+    -- Add your custom models here
+    gpt5 = {
+      provider = "openai",
+      model = "gpt-5",
+      name = "GPT-5"
+    },
+    
+    myclaude = {
+      provider = "claude",
+      model = "claude-3-5-sonnet-20241022", 
+      name = "My Claude"
+    },
+    
+    mixtral = {
+      provider = "openrouter",
+      model = "mistralai/mixtral-8x7b-instruct",
+      name = "Mixtral 8x7B"
+    },
+    
+    coding_assistant = {
+      provider = "gemini",
+      model = "gemini-2.5-flash",
+      name = "Fast Coder"
+    }
+  },
+  
+  -- Override provider settings if needed
+  providers = {
+    openai = {
+      max_tokens = 3000,
+      temperature = 0.3
+    },
+    claude = {
+      max_tokens = 4000,
+      temperature = 0.7
+    }
+  },
+  
+  keymaps = {
+    edit_selection = "<leader>ac"
+  }
+})
+```
+
+### Advanced Configuration
+
+```lua
+require("lmeow").setup({
+  default_model = "gpt4",
+  
+  system_prompt = [[You are an expert programmer. When asked to modify content, 
+    preserve ALL existing structure, text, and formatting that is not directly 
+    related to the requested changes. Only modify what's necessary to complete 
+    the task. Return ONLY the modified content without any explanations.]],
+  
+  models = {
+    -- Your custom models
+  },
+  
+  providers = {
+    openai = {
+      max_tokens = 2000,
+      temperature = 0.7,
+      -- Override base URL for custom endpoints
+      base_url = "https://api.openai.com/v1/chat/completions"
+    }
+  },
+  
+  keymaps = {
+    edit_selection = "<leader>ac"
+  }
+})
+```
+
+## 🎨 Usage Examples
+
+### Code Refactoring
+```lua
+-- Select this function and prompt: "add error handling"
+function getData()
+  return fetch("/api/data")
+end
+
+-- AI might return:
+async function getData() {
+  try {
+    const response = await fetch("/api/data");
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Failed to fetch data:", error);
+    throw error;
+  }
+}
+```
+
+### Text Processing
+```
+Hello, how are you?
+```
+
+**Prompt:** "translate to spanish"
+
+**Result:**
+```
+Hola, ¿cómo estás?
+```
+
+### HTML Enhancement
+```html
+<head>
+  <meta charset="utf-8" />
+</head>
+```
+
+**Prompt:** "add meta tags for SEO"
+
+**Result:**
+```html
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Your page description" />
+  <meta name="keywords" content="keyword1, keyword2, keyword3" />
+  <meta name="author" content="Your Name" />
+</head>
+```
+
+## 🛠️ How It Works
+
+1. **Visual Selection** - Select code/text in visual mode
+2. **Smart Prompting** - Plugin creates context-aware prompts that preserve existing content
+3. **API Integration** - Sends request to your chosen AI provider
+4. **Inline Replacement** - Replaces selection with AI's response
+5. **Content Preservation** - AI is instructed to keep unrelated content intact
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**"No text selected" error**
+- Make sure you've actually selected text in visual mode
+- Try selecting again - sometimes visual marks need to be reset
+
+**"API key not set" error**
+- Check your environment variables are set correctly
+- Restart Neovim after setting environment variables
+
+**Model not found**
+- Check the model name in your config
+- Use `:Lmeow status` to see available models
+
+### Debug Mode
+
+Enable debug logging:
+
+```lua
+require("lmeow").setup({
+  -- Your config
+})
+```
+
+## 🤝 Contributing
+
+Contributions welcome! Please feel free to submit issues and pull requests.
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
+
+---
+
+<div align="center">
+
+Made with 🐱💡 by [0xdilo](https://github.com/0xdilo)
+
+```
+   ∧,,,∧
+  (  • ω •)
+  / ❤️ づ 
+```
+
+</div>

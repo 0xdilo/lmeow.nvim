@@ -33,7 +33,7 @@ function M.parse_api_error(provider_name, response_body)
 end
 
 function M.call_provider(provider_name, provider_config, selected_text, prompt, callback)
-  local full_prompt = config.config.system_prompt .. "\n\nTASK: " .. prompt .. "\n\nORIGINAL CONTENT:\n" .. selected_text .. "\n\nMODIFIED CONTENT:"
+  local full_prompt = config.config.system_prompt .. "\n\nTASK: " .. prompt .. "\n\nIMPORTANT: Preserve ALL existing content and structure. Only modify what's necessary to complete the task. Keep all text, HTML tags, and formatting that are not directly related to the requested change.\n\nCONTENT TO MODIFY:\n" .. selected_text .. "\n\nMODIFIED CONTENT:"
   
   if provider_name == "openai" then
     M.call_openai(provider_config, full_prompt, callback)
@@ -192,17 +192,44 @@ end
 function M.call_gemini(config, prompt, callback)
   local gemini_url = config.base_url .. config.model .. ":generateContent?key=" .. config.api_key
   
+  -- Clean and truncate prompt if it's too long
+  local clean_prompt = prompt:gsub("^%s+", ""):gsub("%s+$", "")
+  if #clean_prompt > 30000 then
+    clean_prompt = clean_prompt:sub(1, 30000) .. "...[truncated]"
+  end
+  
   local payload = vim.json.encode({
     contents = {
       {
+        role = "user",
         parts = {
-          { text = prompt }
+          { text = clean_prompt }
         }
       }
     },
     generationConfig = {
-      maxOutputTokens = config.max_tokens,
-      temperature = config.temperature
+      maxOutputTokens = math.min(config.max_tokens, 8192),
+      temperature = config.temperature,
+      topK = 40,
+      topP = 0.95
+    },
+    safetySettings = {
+      {
+        category = "HARM_CATEGORY_HARASSMENT",
+        threshold = "BLOCK_NONE"
+      },
+      {
+        category = "HARM_CATEGORY_HATE_SPEECH", 
+        threshold = "BLOCK_NONE"
+      },
+      {
+        category = "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        threshold = "BLOCK_NONE"
+      },
+      {
+        category = "HARM_CATEGORY_DANGEROUS_CONTENT",
+        threshold = "BLOCK_NONE"
+      }
     }
   })
   
@@ -223,8 +250,10 @@ function M.call_gemini(config, prompt, callback)
         return
       end
       
-      -- Debug: Show response structure (can be enabled for troubleshooting)
-      -- vim.notify("Gemini response structure: " .. vim.inspect(data), vim.log.levels.DEBUG)
+      -- Debug: Commented out now that it's working
+      -- vim.schedule(function()
+      --   vim.notify("Gemini response structure: " .. vim.inspect(data), vim.log.levels.DEBUG)
+      -- end)
       
       -- More robust response parsing
       if not data.candidates or not data.candidates[1] then
@@ -238,6 +267,11 @@ function M.call_gemini(config, prompt, callback)
       end
       
       if not data.candidates[1].content.parts or not data.candidates[1].content.parts[1] then
+        -- Sometimes Gemini might return blocked content or other issues
+        if data.candidates[1].content.parts and #data.candidates[1].content.parts == 0 then
+          callback(nil, "Gemini response: Empty parts (possibly blocked content)")
+          return
+        end
         callback(nil, "Gemini response: No parts found")
         return
       end

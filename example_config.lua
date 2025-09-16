@@ -38,7 +38,7 @@ return {
         }
       },
       
-      system_prompt = [[You are an expert programmer and text processor. Return ONLY the modified code or text without any explanations, comments, or additional formatting. Do not include markdown, explanations, or any text other than the exact replacement for the selected content.]],
+      system_prompt = [[You are an expert programmer and text processor. When asked to modify content, preserve ALL existing structure, text, and formatting that is not directly related to the requested changes. Only modify what's necessary to complete the task. Return ONLY the modified content without any explanations, comments, markdown, or additional formatting.]],
       
       keymaps = {
         edit_selection = "<leader>ac"  -- AI Code edit

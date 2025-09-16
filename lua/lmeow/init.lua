@@ -108,7 +108,7 @@ M.config = {
     }
   },
   
-  system_prompt = "You are an expert programmer and text processor. Return ONLY the modified code or text without any explanations, comments, or additional formatting. Do not include markdown, explanations, or any text other than the exact replacement for the selected content.",
+  system_prompt = "You are an expert programmer and text processor. When asked to modify content, preserve ALL existing structure, text, and formatting that is not directly related to the requested changes. Only modify what's necessary to complete the task. Return ONLY the modified content without any explanations, comments, markdown, or additional formatting.",
   
   keymaps = {
     edit_selection = "<leader>ac"
@@ -138,7 +138,15 @@ end
 function M.setup_keymaps()
   if M.config.keymaps and M.config.keymaps.edit_selection then
     vim.keymap.set("x", M.config.keymaps.edit_selection, function()
-      require("lmeow.edit").edit_selection()
+      -- Store the current visual selection before exiting visual mode
+      local start_line = vim.fn.line("v")
+      local end_line = vim.fn.line(".")
+      
+      -- Exit visual mode
+      vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes('<Esc>', true, false, true), 'nx', false)
+      
+      -- Call edit function with the stored selection
+      require("lmeow.edit").edit_selection_with_range(start_line, end_line)
     end, { desc = "Edit selection with AI" })
   end
 end
@@ -147,7 +155,7 @@ function M.setup_commands()
   vim.api.nvim_create_user_command("Lmeow", function(opts)
     local args = opts.fargs
     if #args == 0 then
-      vim.notify("Lmeow: Usage: :Lmeow model <name> | :Lmeow models | :Lmeow status", vim.log.levels.WARN)
+      vim.notify("Lmeow: Usage: :Lmeow model <name> | :Lmeow status", vim.log.levels.WARN)
       return
     end
     
@@ -163,18 +171,13 @@ function M.setup_commands()
         vim.notify("Lmeow: Model '" .. model_name .. "' not found", vim.log.levels.ERROR)
       end
       
-    elseif subcommand == "models" then
-      local model_names = vim.tbl_keys(M.config.models)
-      local current = M.current_model or M.config.default_model
-      local current_name = M.config.models[current] and M.config.models[current].name or current
-      vim.notify("Available models: " .. table.concat(model_names, ", ") .. " (current: " .. current_name .. ")", vim.log.levels.INFO)
-      
     elseif subcommand == "status" then
       local model_info = M.config.models[M.current_model]
       if model_info then
         local provider_config = M.config.providers[model_info.provider]
         local api_key_status = provider_config and provider_config.api_key and "set" or "not set"
-        vim.notify("Lmeow: Model=" .. model_info.name .. ", Provider=" .. model_info.provider .. ", API Key=" .. api_key_status, vim.log.levels.INFO)
+        local model_names = vim.tbl_keys(M.config.models)
+        vim.notify("Lmeow: Model=" .. model_info.name .. ", Provider=" .. model_info.provider .. ", API Key=" .. api_key_status .. "\nAvailable models: " .. table.concat(model_names, ", "), vim.log.levels.INFO)
       else
         vim.notify("Lmeow: Invalid model configuration", vim.log.levels.ERROR)
       end
@@ -187,7 +190,7 @@ function M.setup_commands()
       if #cmd_parts == 2 then
         return vim.tbl_filter(function(cmd)
           return cmd:match("^" .. arg_lead)
-        end, {"model", "models", "status"})
+        end, {"model", "status"})
       elseif #cmd_parts == 3 and cmd_parts[2] == "model" then
         local models = vim.tbl_keys(M.config.models)
         return vim.tbl_filter(function(m)

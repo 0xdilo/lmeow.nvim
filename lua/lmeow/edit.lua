@@ -1,30 +1,80 @@
 local M = {}
 local config = require("lmeow")
 
+function M.edit_selection_with_range(start_line, end_line)
+  -- Normalize line range (ensure start_line <= end_line)
+  if start_line > end_line then
+    start_line, end_line = end_line, start_line
+  end
+  
+  -- Validate selection
+  if start_line == 0 or end_line == 0 then
+    vim.notify("No valid selection found. Please select text first.", vim.log.levels.WARN)
+    return
+  end
+  
+  -- Get the actual selected text
+  local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+  
+  -- Handle case where buffer might be empty or new
+  if not lines or #lines == 0 then
+    vim.notify("No content selected. Please select text first.", vim.log.levels.WARN)
+    return
+  end
+  
+  local selected_text = table.concat(lines, "\n")
+  
+  -- Final validation
+  if selected_text == "" or #selected_text:gsub("%s", "") == 0 then
+    vim.notify("No text selected. Please select some text to edit.", vim.log.levels.WARN)
+    return
+  end
+  
+  M.show_prompt_popup(selected_text, start_line - 1, 0, end_line - 1, -1)
+end
+
 function M.edit_selection()
+  -- Force update of visual marks (fix for new/unsaved files)
+  vim.cmd('normal! `<')
+  vim.cmd('normal! `>')
+  
   -- Get visual selection ranges
   local start_line = vim.fn.line("'<")
   local end_line = vim.fn.line("'>")
   
+  -- Validate selection
+  if start_line == 0 or end_line == 0 then
+    vim.notify("No valid selection found. Please select text first.", vim.log.levels.WARN)
+    return
+  end
+  
   -- Get the actual selected text
   local lines = vim.api.nvim_buf_get_lines(0, start_line - 1, end_line, false)
+  
+  -- Handle case where buffer might be empty or new
+  if not lines or #lines == 0 then
+    vim.notify("No content selected. Please select text first.", vim.log.levels.WARN)
+    return
+  end
+  
   local selected_text = table.concat(lines, "\n")
   
   -- If we get the last line, we need to handle partial selection
   if end_line > start_line then
-    local last_line = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
-    if last_line then
+    local last_line_content = vim.api.nvim_buf_get_lines(0, end_line - 1, end_line, false)[1]
+    if last_line_content then
       local end_col = vim.fn.col("'>")
-      if end_col < #last_line then
-        lines[#lines] = last_line:sub(1, end_col)
+      if end_col < #last_line_content then
+        lines[#lines] = last_line_content:sub(1, end_col)
       end
     end
   end
   
   selected_text = table.concat(lines, "\n")
   
+  -- Final validation
   if selected_text == "" or #selected_text:gsub("%s", "") == 0 then
-    vim.notify("No text selected", vim.log.levels.WARN)
+    vim.notify("No text selected. Please select some text to edit.", vim.log.levels.WARN)
     return
   end
   
