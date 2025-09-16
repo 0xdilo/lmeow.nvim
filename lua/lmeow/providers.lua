@@ -33,7 +33,22 @@ function M.parse_api_error(provider_name, response_body)
 end
 
 function M.call_provider(provider_name, provider_config, selected_text, prompt, callback)
-  local full_prompt = config.config.system_prompt .. "\n\nTASK: " .. prompt .. "\n\nIMPORTANT: Preserve ALL existing content and structure. Only modify what's necessary to complete the task. Keep all text, HTML tags, and formatting that are not directly related to the requested change.\n\nCONTENT TO MODIFY:\n" .. selected_text .. "\n\nMODIFIED CONTENT:"
+  -- Build the complete system prompt by combining default with user custom prompt
+  local system_prompt_parts = {}
+  
+  -- Add the base system prompt
+  table.insert(system_prompt_parts, config.config.system_prompt)
+  
+  -- Add user custom system prompt if provided
+  if config.config.custom_system_prompt and config.config.custom_system_prompt ~= "" then
+    table.insert(system_prompt_parts, config.config.custom_system_prompt)
+  end
+  
+  -- Join all system prompt parts
+  local combined_system_prompt = table.concat(system_prompt_parts, "\n\n")
+  
+  -- Build the full prompt
+  local full_prompt = combined_system_prompt .. "\n\nTASK: " .. prompt .. "\n\nIMPORTANT: Preserve ALL existing content and structure. Only modify what's necessary to complete the task. Keep all text, HTML tags, and formatting that are not directly related to the requested change.\n\nCONTENT TO MODIFY:\n" .. selected_text .. "\n\nMODIFIED CONTENT:"
   
   if provider_name == "openai" then
     M.call_openai(provider_config, full_prompt, callback)

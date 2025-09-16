@@ -160,10 +160,8 @@ require("lmeow").setup({
 require("lmeow").setup({
   default_model = "gpt4",
   
-  system_prompt = [[You are an expert programmer. When asked to modify content, 
-    preserve ALL existing structure, text, and formatting that is not directly 
-    related to the requested changes. Only modify what's necessary to complete 
-    the task. Return ONLY the modified content without any explanations.]],
+  -- Add your own custom system prompt that gets combined with the default one
+  custom_system_prompt = "Speak with enthusiasm and use emojis when appropriate 🚀",
   
   models = {
     -- Your custom models
@@ -177,6 +175,31 @@ require("lmeow").setup({
       base_url = "https://api.openai.com/v1/chat/completions"
     }
   },
+  
+  keymaps = {
+    edit_selection = "<leader>ac"
+  }
+})
+```
+
+### Custom System Prompt
+
+You can add your own custom system prompt that will be combined with the default system prompt. This is perfect for:
+
+- Setting a specific tone or style (e.g., "Always speak with emojis 😊")
+- Adding domain-specific knowledge or requirements
+- Customizing the AI's behavior for your specific needs
+
+```lua
+require("lmeow").setup({
+  default_model = "gpt4",
+  
+  -- Examples of custom system prompts:
+  custom_system_prompt = "Speak without using any emojis",  -- Disable emojis
+  -- OR
+  custom_system_prompt = "Always respond with a helpful tone and include relevant code examples",
+  -- OR  
+  custom_system_prompt = "You are a senior Python developer. Focus on clean, idiomatic Python code.",
   
   keymaps = {
     edit_selection = "<leader>ac"
