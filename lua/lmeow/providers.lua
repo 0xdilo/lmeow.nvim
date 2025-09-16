@@ -39,7 +39,8 @@ function M.parse_api_error(provider_name, response_body)
   return provider_name .. " API error: " .. error_msg
 end
 
-function M.call_provider(provider_name, provider_config, maybe_model_config, maybe_selected_text, maybe_prompt, maybe_callback)
+function M.call_provider(provider_name, provider_config, maybe_model_config, maybe_selected_text, maybe_prompt,
+                         maybe_callback)
   -- Support both old and new signatures:
   -- New: call_provider(name, provider_cfg, model_cfg, selected_text, prompt, cb)
   -- Old: call_provider(name, merged_cfg, selected_text, prompt, cb)
@@ -57,8 +58,8 @@ function M.call_provider(provider_name, provider_config, maybe_model_config, may
     callback = maybe_prompt
   end
 
-  -- Merge provider and model config: provider as base, model overrides
-  local final_config = merge(provider_config or {}, model_config or {})
+  -- Use the provided configuration; params must be provided separately in config
+  local final_config = provider_config or {}
 
   -- Build the complete system prompt by combining default with user custom prompt
   local system_prompt_parts = {}
@@ -112,7 +113,8 @@ function M.call_provider(provider_name, provider_config, maybe_model_config, may
 end
 
 function M.call_openai(modelConfig, prompt, callback)
-  local payload = vim.json.encode(merge(modelConfig, {
+  local params = modelConfig.params or {}
+  local payload = vim.json.encode(merge(params, {
     messages = {
       { role = "system", content = prompt }
     },
@@ -143,16 +145,12 @@ function M.call_openai(modelConfig, prompt, callback)
 end
 
 function M.call_claude(modelConfig, prompt, callback)
-  local payload = vim.json.encode(
-    merge(
-      modelConfig,
-      {
-        messages = {
-          { role = "user", content = prompt }
-        }
-      }
-    )
-  )
+  local params = modelConfig.params or {}
+  local payload = vim.json.encode(merge(params, {
+    messages = {
+      { role = "user", content = prompt }
+    }
+  }))
 
   curl.post(modelConfig.base_url, {
     headers = {
@@ -180,16 +178,12 @@ function M.call_claude(modelConfig, prompt, callback)
 end
 
 function M.call_openrouter(modelConfig, prompt, callback)
-  local payload = vim.json.encode(
-    merge(
-      modelConfig,
-      {
-        messages = {
-          { role = "system", content = prompt }
-        },
-      }
-    )
-  )
+  local params = modelConfig.params or {}
+  local payload = vim.json.encode(merge(params, {
+    messages = {
+      { role = "system", content = prompt }
+    },
+  }))
 
   curl.post(modelConfig.base_url, {
     headers = {
@@ -218,16 +212,12 @@ function M.call_openrouter(modelConfig, prompt, callback)
 end
 
 function M.call_grok(modelConfig, prompt, callback)
-  local payload = vim.json.encode(
-    merge(
-      modelConfig,
-      {
-        messages = {
-          { role = "system", content = prompt }
-        },
-      }
-    )
-  )
+  local params = modelConfig.params or {}
+  local payload = vim.json.encode(merge(params, {
+    messages = {
+      { role = "system", content = prompt }
+    },
+  }))
 
   curl.post(modelConfig.base_url, {
     headers = {
@@ -262,6 +252,7 @@ function M.call_gemini(modelConfig, prompt, callback)
     clean_prompt = clean_prompt:sub(1, 30000) .. "...[truncated]"
   end
 
+  local p = modelConfig.params or {}
   local payload = vim.json.encode({
     contents = {
       {
@@ -272,8 +263,8 @@ function M.call_gemini(modelConfig, prompt, callback)
       }
     },
     generationConfig = {
-      maxOutputTokens = math.min(modelConfig.max_tokens, 8192),
-      temperature = modelConfig.temperature,
+      maxOutputTokens = p.max_tokens or 2000,
+      temperature = p.temperature,
       topK = 40,
       topP = 0.95
     },

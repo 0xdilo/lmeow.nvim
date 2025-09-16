@@ -79,32 +79,42 @@ M.config = {
     openai = {
       base_url = "https://api.openai.com/v1/chat/completions",
       env_var = "OPENAI_API_KEY",
-      max_tokens = 2000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 2000,
+        temperature = 0.7
+      }
     },
     claude = {
       base_url = "https://api.anthropic.com/v1/messages",
       env_var = "ANTHROPIC_API_KEY",
-      max_tokens = 2000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 2000,
+        temperature = 0.7
+      }
     },
     openrouter = {
       base_url = "https://openrouter.ai/api/v1/chat/completions",
       env_var = "OPENROUTER_API_KEY",
-      max_tokens = 2000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 2000,
+        temperature = 0.7
+      }
     },
     grok = {
       base_url = "https://api.x.ai/v1/chat/completions",
       env_var = "XAI_API_KEY",
-      max_tokens = 2000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 2000,
+        temperature = 0.7
+      }
     },
     gemini = {
       base_url = "https://generativelanguage.googleapis.com/v1beta/models/",
       env_var = "GEMINI_API_KEY",
-      max_tokens = 2000,
-      temperature = 0.7
+      defaultModelParams = {
+        max_tokens = 2000,
+        temperature = 0.7
+      }
     }
   },
 
@@ -223,7 +233,7 @@ function M.get_model_config(model_name)
     return nil
   end
 
-  -- Create a copy of the provider config
+  -- Create a copy of the provider config (provider-level data only)
   local full_config = vim.tbl_deep_extend("force", {}, provider_config)
 
   -- Always check environment variables for API key
@@ -231,11 +241,48 @@ function M.get_model_config(model_name)
     full_config.api_key = os.getenv(full_config.env_var)
   end
 
-  -- Merge model config
-  full_config = vim.tbl_deep_extend("force", full_config, model_config)
+  -- Attach model identity info (but don't mix with payload params)
+  full_config.provider = model_config.provider
+  full_config.model = model_config.model
+  full_config.name = model_config.name or full_config.model
+  -- Allow model-level override of provider connection settings
+  if model_config.base_url then full_config.base_url = model_config.base_url end
+  if model_config.api_key then full_config.api_key = model_config.api_key end
+  if model_config.env_var then full_config.env_var = model_config.env_var end
+
+  -- Build params separately: provider defaults -> model params -> legacy fallbacks
+  local params = {}
+  -- Provider defaults (new key)
+  if provider_config.defaultModelParams then
+    params = vim.tbl_deep_extend("force", params, provider_config.defaultModelParams)
+  end
+  -- Provider legacy fallbacks
+  if provider_config.max_tokens or provider_config.temperature then
+    params = vim.tbl_deep_extend("force", params, {
+      max_tokens = provider_config.max_tokens,
+      temperature = provider_config.temperature,
+    })
+  end
+  -- Model-specific params (new key)
+  if model_config.params then
+    params = vim.tbl_deep_extend("force", params, model_config.params)
+  end
+  -- Model legacy fallbacks
+  if model_config.max_tokens or model_config.temperature then
+    params = vim.tbl_deep_extend("force", params, {
+      max_tokens = model_config.max_tokens,
+      temperature = model_config.temperature,
+    })
+  end
+
+  -- Ensure model is present in params for providers that require it in the payload
+  if model_config.model and params.model == nil then
+    params.model = model_config.model
+  end
+
+  full_config.params = params
 
   return full_config
 end
 
 return M
-
