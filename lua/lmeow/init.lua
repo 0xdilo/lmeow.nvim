@@ -80,8 +80,8 @@ M.config = {
       base_url = "https://api.openai.com/v1/chat/completions",
       env_var = "OPENAI_API_KEY",
       defaultModelParams = {
-        max_tokens = 2000,
-        temperature = 0.7
+        max_completion_tokens = 32000,
+        temperature = 1
       }
     },
     claude = {
