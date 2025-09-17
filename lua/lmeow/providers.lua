@@ -2,6 +2,12 @@ local M = {}
 local curl = require("plenary.curl")
 local config = require("lmeow")
 
+local function debug_log(...)
+  if config.debug_mode then
+    print(...)
+  end
+end
+
 local function merge(t1, t2)
   local res = {}
   for k, v in pairs(t1) do res[k] = v end
@@ -115,43 +121,98 @@ end
 function M.call_openai(modelConfig, prompt, callback)
   local params = modelConfig.params or {}
   local payload = vim.json.encode(merge(params, {
+    model = modelConfig.model,
     messages = {
       { role = "system", content = prompt }
     },
+    stream = true
   }))
 
+  local accumulated_content = ""
+  local chunk_count = 0
+  local start_time = vim.uv.hrtime()
+  debug_log("OpenAI: Starting streaming request")
+  
   curl.post(modelConfig.base_url, {
     headers = {
       ["Content-Type"] = "application/json",
       ["Authorization"] = "Bearer " .. modelConfig.api_key
     },
     body = payload,
+    stream = function(err, chunk)
+      if err then
+        callback(nil, "OpenAI stream error: " .. tostring(err))
+        return
+      end
+      
+      if chunk then
+        local lines = vim.split(chunk, "\n")
+        for _, line in ipairs(lines) do
+          if line:match("^data: ") then
+            local json_str = line:sub(7) -- Remove "data: " prefix
+            if json_str ~= "[DONE]" then
+              local success, data = pcall(vim.json.decode, json_str)
+              if success and data.choices and data.choices[1] then
+                local choice = data.choices[1]
+                
+                -- Handle content chunks
+                if choice.delta and choice.delta.content then
+                  local content_chunk = choice.delta.content
+                  accumulated_content = accumulated_content .. content_chunk
+                  chunk_count = chunk_count + 1
+                  local time_since_start = (vim.uv.hrtime() - start_time) / 1000000
+                  debug_log(string.format("OpenAI CHUNK %d: +%d chars, total=%d, api_time=%.1fms", chunk_count, #content_chunk, #accumulated_content, time_since_start))
+                  callback(accumulated_content, nil, false) -- false means not finished
+                end
+                
+                -- Handle completion
+                if choice.finish_reason and choice.finish_reason ~= vim.NIL then
+                  debug_log(string.format("OpenAI DONE: %d chunks, final length=%d, reason=%s", chunk_count, #accumulated_content, choice.finish_reason))
+                  callback(accumulated_content, nil, true) -- true means finished
+                end
+              end
+            else
+              debug_log(string.format("OpenAI DONE: %d chunks, final length=%d", chunk_count, #accumulated_content))
+              callback(accumulated_content, nil, true) -- true means finished
+            end
+          end
+        end
+      end
+    end,
     callback = function(response)
       if response.status ~= 200 then
         callback(nil, M.parse_api_error("OpenAI", response.body))
         return
       end
-
-      local success, data = pcall(vim.json.decode, response.body)
-      if not success then
-        callback(nil, "Failed to parse OpenAI response")
-        return
+      -- Stream callback handles the response, so this might not be called
+      if accumulated_content == "" then
+        callback(nil, "No content received from OpenAI")
       end
-
-      local content = data.choices[1].message.content
-      callback(content, nil)
     end
   })
 end
 
 function M.call_claude(modelConfig, prompt, callback)
   local params = modelConfig.params or {}
+  
+  -- Ensure max_tokens is set (required by Claude)
+  if not params.max_tokens then
+    params.max_tokens = 4096
+  end
+  
   local payload = vim.json.encode(merge(params, {
+    model = modelConfig.model,
     messages = {
       { role = "user", content = prompt }
-    }
+    },
+    stream = true
   }))
 
+  local accumulated_content = ""
+  local chunk_count = 0
+  local start_time = vim.uv.hrtime()
+  debug_log("Claude: Starting streaming request with model: " .. (modelConfig.model or "unknown"))
+  
   curl.post(modelConfig.base_url, {
     headers = {
       ["Content-Type"] = "application/json",
@@ -159,20 +220,50 @@ function M.call_claude(modelConfig, prompt, callback)
       ["anthropic-version"] = "2023-06-01"
     },
     body = payload,
+    stream = function(err, chunk)
+      if err then
+        callback(nil, "Claude stream error: " .. tostring(err))
+        return
+      end
+      
+      if chunk then
+        local lines = vim.split(chunk, "\n")
+        local current_event = nil
+        
+        for _, line in ipairs(lines) do
+          if line:match("^event: ") then
+            current_event = line:sub(8) -- Remove "event: " prefix
+          elseif line:match("^data: ") then
+            local json_str = line:sub(7) -- Remove "data: " prefix
+            if json_str ~= "" and json_str ~= "[DONE]" then
+              local success, data = pcall(vim.json.decode, json_str)
+              if success then
+                if data.type == "content_block_delta" and data.delta and data.delta.type == "text_delta" and data.delta.text then
+                  local content_chunk = data.delta.text
+                  accumulated_content = accumulated_content .. content_chunk
+                  chunk_count = chunk_count + 1
+                  local time_since_start = (vim.uv.hrtime() - start_time) / 1000000
+                  debug_log(string.format("Claude CHUNK %d: +%d chars, total=%d, api_time=%.1fms", chunk_count, #content_chunk, #accumulated_content, time_since_start))
+                  callback(accumulated_content, nil, false) -- false means not finished
+                elseif data.type == "message_stop" then
+                  debug_log(string.format("Claude DONE: %d chunks, final length=%d", chunk_count, #accumulated_content))
+                  callback(accumulated_content, nil, true) -- true means finished
+                end
+              end
+            end
+          end
+        end
+      end
+    end,
     callback = function(response)
       if response.status ~= 200 then
         callback(nil, M.parse_api_error("Claude", response.body))
         return
       end
-
-      local success, data = pcall(vim.json.decode, response.body)
-      if not success then
-        callback(nil, "Failed to parse Claude response")
-        return
+      -- Stream callback handles the response, so this might not be called
+      if accumulated_content == "" then
+        callback(nil, "No content received from Claude")
       end
-
-      local content = data.content[1].text
-      callback(content, nil)
     end
   })
 end
@@ -180,11 +271,18 @@ end
 function M.call_openrouter(modelConfig, prompt, callback)
   local params = modelConfig.params or {}
   local payload = vim.json.encode(merge(params, {
+    model = modelConfig.model,
     messages = {
       { role = "system", content = prompt }
     },
+    stream = true
   }))
 
+  local accumulated_content = ""
+  local chunk_count = 0
+  local start_time = vim.uv.hrtime()
+  debug_log("OpenRouter: Starting streaming request")
+  
   curl.post(modelConfig.base_url, {
     headers = {
       ["Content-Type"] = "application/json",
@@ -193,20 +291,71 @@ function M.call_openrouter(modelConfig, prompt, callback)
       ["X-Title"] = "lmeow.nvim"
     },
     body = payload,
+    stream = function(err, chunk)
+      if err then
+        callback(nil, "OpenRouter stream error: " .. tostring(err))
+        return
+      end
+      
+      if chunk then
+        local lines = vim.split(chunk, "\n")
+        for _, line in ipairs(lines) do
+          -- Handle OpenRouter SSE comments (ignore them)
+          if line:match("^: ") then
+            debug_log("OpenRouter: Received SSE comment: " .. line)
+          elseif line:match("^data: ") then
+            local json_str = line:sub(7) -- Remove "data: " prefix
+            if json_str ~= "[DONE]" then
+              local success, data = pcall(vim.json.decode, json_str)
+              if success and data.choices and data.choices[1] then
+                local choice = data.choices[1]
+                
+                -- Check for mid-stream errors
+                if data.error then
+                  debug_log("OpenRouter: Mid-stream error: " .. vim.inspect(data.error))
+                  callback(nil, "OpenRouter API error: " .. (data.error.message or "Unknown error"))
+                  return
+                end
+                
+                -- Handle content chunks
+                if choice.delta and choice.delta.content then
+                  local content_chunk = choice.delta.content
+                  accumulated_content = accumulated_content .. content_chunk
+                  chunk_count = chunk_count + 1
+                  local time_since_start = (vim.uv.hrtime() - start_time) / 1000000
+                  debug_log(string.format("OpenRouter CHUNK %d: +%d chars, total=%d, api_time=%.1fms", chunk_count, #content_chunk, #accumulated_content, time_since_start))
+                  callback(accumulated_content, nil, false) -- false means not finished
+                end
+                
+                -- Handle completion
+                if choice.finish_reason and choice.finish_reason ~= vim.NIL then
+                  debug_log(string.format("OpenRouter DONE: %d chunks, final length=%d, reason=%s", chunk_count, #accumulated_content, choice.finish_reason))
+                  callback(accumulated_content, nil, true) -- true means finished
+                  
+                  -- Handle error finish reason
+                  if choice.finish_reason == "error" then
+                    callback(nil, "OpenRouter: Stream terminated due to error")
+                    return
+                  end
+                end
+              end
+            else
+              debug_log(string.format("OpenRouter DONE: %d chunks, final length=%d", chunk_count, #accumulated_content))
+              callback(accumulated_content, nil, true) -- true means finished
+            end
+          end
+        end
+      end
+    end,
     callback = function(response)
       if response.status ~= 200 then
         callback(nil, M.parse_api_error("OpenRouter", response.body))
         return
       end
-
-      local success, data = pcall(vim.json.decode, response.body)
-      if not success then
-        callback(nil, "Failed to parse OpenRouter response")
-        return
+      -- Stream callback handles the response, so this might not be called
+      if accumulated_content == "" then
+        callback(nil, "No content received from OpenRouter")
       end
-
-      local content = data.choices[1].message.content
-      callback(content, nil)
     end
   })
 end
@@ -214,37 +363,79 @@ end
 function M.call_grok(modelConfig, prompt, callback)
   local params = modelConfig.params or {}
   local payload = vim.json.encode(merge(params, {
+    model = modelConfig.model,
     messages = {
       { role = "system", content = prompt }
     },
+    stream = true
   }))
 
+  local accumulated_content = ""
+  local chunk_count = 0
+  local start_time = vim.uv.hrtime()
+  debug_log("Grok: Starting streaming request")
+  
   curl.post(modelConfig.base_url, {
     headers = {
       ["Content-Type"] = "application/json",
       ["Authorization"] = "Bearer " .. modelConfig.api_key
     },
     body = payload,
+    stream = function(err, chunk)
+      if err then
+        callback(nil, "Grok stream error: " .. tostring(err))
+        return
+      end
+      
+      if chunk then
+        local lines = vim.split(chunk, "\n")
+        for _, line in ipairs(lines) do
+          if line:match("^data: ") then
+            local json_str = line:sub(7) -- Remove "data: " prefix
+            if json_str ~= "[DONE]" then
+              local success, data = pcall(vim.json.decode, json_str)
+              if success and data.choices and data.choices[1] then
+                local choice = data.choices[1]
+                
+                -- Handle content chunks
+                if choice.delta and choice.delta.content then
+                  local content_chunk = choice.delta.content
+                  accumulated_content = accumulated_content .. content_chunk
+                  chunk_count = chunk_count + 1
+                  local time_since_start = (vim.uv.hrtime() - start_time) / 1000000
+                  debug_log(string.format("Grok CHUNK %d: +%d chars, total=%d, api_time=%.1fms", chunk_count, #content_chunk, #accumulated_content, time_since_start))
+                  callback(accumulated_content, nil, false) -- false means not finished
+                end
+                
+                -- Handle completion
+                if choice.finish_reason and choice.finish_reason ~= vim.NIL then
+                  debug_log(string.format("Grok DONE: %d chunks, final length=%d, reason=%s", chunk_count, #accumulated_content, choice.finish_reason))
+                  callback(accumulated_content, nil, true) -- true means finished
+                end
+              end
+            else
+              debug_log(string.format("Grok DONE: %d chunks, final length=%d", chunk_count, #accumulated_content))
+              callback(accumulated_content, nil, true) -- true means finished
+            end
+          end
+        end
+      end
+    end,
     callback = function(response)
       if response.status ~= 200 then
         callback(nil, M.parse_api_error("Grok", response.body))
         return
       end
-
-      local success, data = pcall(vim.json.decode, response.body)
-      if not success then
-        callback(nil, "Failed to parse Grok response")
-        return
+      -- Stream callback handles the response, so this might not be called
+      if accumulated_content == "" then
+        callback(nil, "No content received from Grok")
       end
-
-      local content = data.choices[1].message.content
-      callback(content, nil)
     end
   })
 end
 
 function M.call_gemini(modelConfig, prompt, callback)
-  local gemini_url = modelConfig.base_url .. modelConfig.model .. ":generateContent?key=" .. modelConfig.api_key
+  local gemini_url = modelConfig.base_url .. modelConfig.model .. ":streamGenerateContent?alt=sse&key=" .. modelConfig.api_key
 
   -- Clean and truncate prompt if it's too long
   local clean_prompt = prompt:gsub("^%s+", ""):gsub("%s+$", "")
@@ -288,56 +479,59 @@ function M.call_gemini(modelConfig, prompt, callback)
     }
   })
 
+  local accumulated_content = ""
+  local chunk_count = 0
+  local start_time = vim.uv.hrtime()
+  debug_log("Gemini: Starting streaming request")
+  
   curl.post(gemini_url, {
     headers = {
       ["Content-Type"] = "application/json"
     },
     body = payload,
+    stream = function(err, chunk)
+      if err then
+        callback(nil, "Gemini stream error: " .. tostring(err))
+        return
+      end
+      
+      if chunk then
+        local lines = vim.split(chunk, "\n")
+        for _, line in ipairs(lines) do
+          if line:match("^data: ") then
+            local json_str = line:sub(7) -- Remove "data: " prefix
+            if json_str ~= "" and json_str ~= "[DONE]" then
+              local success, data = pcall(vim.json.decode, json_str)
+              if success and data.candidates and data.candidates[1] then
+                if data.candidates[1].content and data.candidates[1].content.parts and data.candidates[1].content.parts[1] then
+                  local chunk_content = data.candidates[1].content.parts[1].text
+                  if chunk_content then
+                    -- Gemini sends delta chunks, we need to accumulate them
+                    accumulated_content = accumulated_content .. chunk_content
+                    chunk_count = chunk_count + 1
+                    local time_since_start = (vim.uv.hrtime() - start_time) / 1000000
+                    debug_log(string.format("Gemini CHUNK %d: +%d chars, total=%d, api_time=%.1fms", chunk_count, #chunk_content, #accumulated_content, time_since_start))
+                    callback(accumulated_content, nil, false) -- false means not finished
+                  end
+                end
+                
+                -- Check if this is the final chunk (Gemini typically has finishReason)
+                if data.candidates[1].finishReason then
+                  debug_log(string.format("Gemini DONE: %d chunks, final length=%d, reason=%s", chunk_count, #accumulated_content, data.candidates[1].finishReason))
+                  callback(accumulated_content, nil, true) -- true means finished
+                end
+              end
+            end
+          end
+        end
+      end
+    end,
     callback = function(response)
       if response.status ~= 200 then
         callback(nil, M.parse_api_error("Gemini", response.body))
         return
       end
-
-      local success, data = pcall(vim.json.decode, response.body)
-      if not success then
-        callback(nil, "Failed to parse Gemini response: " .. tostring(response.body))
-        return
-      end
-
-      -- Debug: Commented out now that it's working
-      -- vim.schedule(function()
-      --   vim.notify("Gemini response structure: " .. vim.inspect(data), vim.log.levels.DEBUG)
-      -- end)
-
-      -- More robust response parsing
-      if not data.candidates or not data.candidates[1] then
-        callback(nil, "Gemini response: No candidates found")
-        return
-      end
-
-      if not data.candidates[1].content then
-        callback(nil, "Gemini response: No content found")
-        return
-      end
-
-      if not data.candidates[1].content.parts or not data.candidates[1].content.parts[1] then
-        -- Sometimes Gemini might return blocked content or other issues
-        if data.candidates[1].content.parts and #data.candidates[1].content.parts == 0 then
-          callback(nil, "Gemini response: Empty parts (possibly blocked content)")
-          return
-        end
-        callback(nil, "Gemini response: No parts found")
-        return
-      end
-
-      local content = data.candidates[1].content.parts[1].text
-      if not content then
-        callback(nil, "Gemini response: No text content found")
-        return
-      end
-
-      callback(content, nil)
+      -- Stream callback handles the response, so this might not be called for successful streaming
     end
   })
 end

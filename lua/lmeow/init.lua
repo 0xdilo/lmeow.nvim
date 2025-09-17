@@ -2,65 +2,100 @@ local M = {}
 
 M.config = {
   models = {
-    -- OpenAI models
-    gpt4 = {
+    -- OpenAI models (2025 latest)
+    gpt5 = {
       provider = "openai",
-      model = "gpt-4",
-      name = "GPT-4"
+      model = "gpt-5",
+      name = "GPT-5"
     },
-    gpt4o = {
+    gpt5mini = {
       provider = "openai",
-      model = "gpt-4o",
-      name = "GPT-4o"
+      model = "gpt-5-mini",
+      name = "GPT-5 Mini"
     },
-    gpt4turbo = {
+    gpt5nano = {
       provider = "openai",
-      model = "gpt-4-turbo",
-      name = "GPT-4 Turbo"
+      model = "gpt-5-nano",
+      name = "GPT-5 Nano"
     },
-    gpt35 = {
+    gpt41 = {
       provider = "openai",
-      model = "gpt-3.5-turbo",
-      name = "GPT-3.5"
+      model = "gpt-4.1",
+      name = "GPT-4.1"
+    },
+    gpt41mini = {
+      provider = "openai",
+      model = "gpt-4.1-mini",
+      name = "GPT-4.1 Mini"
+    },
+    gpt45 = {
+      provider = "openai",
+      model = "gpt-4.5",
+      name = "GPT-4.5"
     },
 
-    -- Claude models
-    claude = {
+    -- Claude models (2025 latest)
+    claude37 = {
       provider = "claude",
-      model = "claude-3-5-sonnet-20241022",
-      name = "Claude 3.5 Sonnet"
+      model = "claude-3-7-sonnet-20250219",
+      name = "Claude 3.7 Sonnet"
     },
-    claudeopus = {
+    claude4 = {
       provider = "claude",
-      model = "claude-3-opus-20240229",
-      name = "Claude 3 Opus"
+      model = "claude-sonnet-4-20250514",
+      name = "Claude 4 Sonnet"
     },
-    claudehaiku = {
+    claude4opus = {
       provider = "claude",
-      model = "claude-3-haiku-20240307",
-      name = "Claude 3 Haiku"
+      model = "claude-opus-4-20250514",
+      name = "Claude 4 Opus"
+    },
+    claude41opus = {
+      provider = "claude",
+      model = "claude-opus-4-1-20250805",
+      name = "Claude 4.1 Opus"
     },
 
-    -- OpenRouter models
-    gpt4router = {
+    -- OpenRouter models (2025 latest)
+    gpt5router = {
       provider = "openrouter",
-      model = "openai/gpt-4",
-      name = "GPT-4 (OpenRouter)"
+      model = "openai/gpt-5",
+      name = "GPT-5 (OpenRouter)"
     },
-    llama = {
+    llama4 = {
       provider = "openrouter",
-      model = "meta-llama/llama-3.1-70b",
-      name = "Llama 3.1 70B"
+      model = "meta-llama/llama-4-maverick-17b",
+      name = "Llama 4 Maverick 17B"
+    },
+    llama4scout = {
+      provider = "openrouter",
+      model = "meta-llama/llama-4-scout-17b",
+      name = "Llama 4 Scout 17B"
+    },
+    llama31_405b = {
+      provider = "openrouter",
+      model = "meta-llama/llama-3.1-405b",
+      name = "Llama 3.1 405B"
     },
 
-    -- Grok models
-    grok = {
+    -- Grok models (2025 latest)
+    grok4 = {
       provider = "grok",
-      model = "grok-beta",
-      name = "Grok Beta"
+      model = "grok-4",
+      name = "Grok 4"
+    },
+    grok4heavy = {
+      provider = "grok",
+      model = "grok-4-heavy",
+      name = "Grok 4 Heavy"
+    },
+    grokcode = {
+      provider = "grok",
+      model = "grok-code-fast-1",
+      name = "Grok Code Fast"
     },
 
-    -- Gemini models
+    -- Gemini models (keeping current as requested)
     gemini = {
       provider = "gemini",
       model = "gemini-2.5-flash",
@@ -73,7 +108,7 @@ M.config = {
     }
   },
 
-  default_model = "gpt4",
+  default_model = "claude4",
 
   providers = {
     openai = {
@@ -112,7 +147,7 @@ M.config = {
       base_url = "https://generativelanguage.googleapis.com/v1beta/models/",
       env_var = "GEMINI_API_KEY",
       defaultModelParams = {
-        max_tokens = 2000,
+        max_tokens = 8000,
         temperature = 0.7
       }
     }
@@ -127,6 +162,7 @@ M.config = {
 }
 
 M.current_model = nil
+M.debug_mode = false
 
 function M.setup(opts)
   M.config = vim.tbl_deep_extend("force", M.config, opts or {})
@@ -144,6 +180,9 @@ function M.setup(opts)
 
   vim.api.nvim_set_hl(0, "LmeowPopup", { fg = "#ffffff", bg = "#1e1e1e" })
   vim.api.nvim_set_hl(0, "LmeowBorder", { fg = "#61afef", bg = "#1e1e1e" })
+  
+  -- Note: vim.tbl_flatten deprecation warnings come from plenary.nvim dependency
+  -- This will be fixed when plenary.nvim updates to use vim.iter():flatten()
 end
 
 function M.setup_keymaps()
@@ -166,7 +205,7 @@ function M.setup_commands()
   vim.api.nvim_create_user_command("Lmeow", function(opts)
     local args = opts.fargs
     if #args == 0 then
-      vim.notify("Lmeow: Usage: :Lmeow model <name> | :Lmeow status", vim.log.levels.WARN)
+      vim.notify("Lmeow: Usage: :Lmeow model <name> | :Lmeow status | :Lmeow debug [on|off]", vim.log.levels.WARN)
       return
     end
 
@@ -187,15 +226,35 @@ function M.setup_commands()
         local provider_config = M.config.providers[model_info.provider]
         local api_key_status = provider_config and provider_config.api_key and "set" or "not set"
         local model_names = vim.tbl_keys(M.config.models)
+        local debug_status = M.debug_mode and "enabled" or "disabled"
         vim.notify(
           "Lmeow: Model=" ..
           model_info.name ..
           ", Provider=" ..
           model_info.provider ..
-          ", API Key=" .. api_key_status .. "\nAvailable models: " .. table.concat(model_names, ", "),
+          ", API Key=" .. api_key_status .. 
+          ", Debug=" .. debug_status .. "\nAvailable models: " .. table.concat(model_names, ", "),
           vim.log.levels.INFO)
       else
         vim.notify("Lmeow: Invalid model configuration", vim.log.levels.ERROR)
+      end
+    elseif subcommand == "debug" then
+      if #args >= 2 then
+        local debug_arg = args[2]:lower()
+        if debug_arg == "on" or debug_arg == "true" or debug_arg == "1" then
+          M.debug_mode = true
+          vim.notify("Lmeow: Debug mode enabled", vim.log.levels.INFO)
+        elseif debug_arg == "off" or debug_arg == "false" or debug_arg == "0" then
+          M.debug_mode = false
+          vim.notify("Lmeow: Debug mode disabled", vim.log.levels.INFO)
+        else
+          vim.notify("Lmeow: Invalid debug argument. Use 'on' or 'off'", vim.log.levels.ERROR)
+        end
+      else
+        -- Toggle debug mode
+        M.debug_mode = not M.debug_mode
+        local status = M.debug_mode and "enabled" or "disabled"
+        vim.notify("Lmeow: Debug mode " .. status, vim.log.levels.INFO)
       end
     end
   end, {
@@ -206,12 +265,16 @@ function M.setup_commands()
       if #cmd_parts == 2 then
         return vim.tbl_filter(function(cmd)
           return cmd:match("^" .. arg_lead)
-        end, { "model", "status" })
+        end, { "model", "status", "debug" })
       elseif #cmd_parts == 3 and cmd_parts[2] == "model" then
         local models = vim.tbl_keys(M.config.models)
         return vim.tbl_filter(function(m)
           return m:match("^" .. arg_lead)
         end, models)
+      elseif #cmd_parts == 3 and cmd_parts[2] == "debug" then
+        return vim.tbl_filter(function(cmd)
+          return cmd:match("^" .. arg_lead)
+        end, { "on", "off" })
       end
       return {}
     end
